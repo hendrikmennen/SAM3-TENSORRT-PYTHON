@@ -39,7 +39,7 @@ pip install onnx_graphsurgeon
 - Install TensorRT that matches your CUDA toolkit.
 - Ensure `trtexec` is on your `PATH` and TensorRT libraries are visible in your library path.
 - For Linux, `Requirements_Install_Commands.txt` includes an example `apt-get` + `pip` install and `PATH` / `LD_LIBRARY_PATH` exports.
-- REMEMBER TO MATCH CUDA-PYTHON <= TO VERSION CUDA-TOOLKIT INSTALLED
+- REMEMBER TO MATCH CUDA-PYTHON VERSION <= TO CUDA-TOOLKIT VERSION INSTALLED
 ---
 
 ## 2. Download or Export ONNX Models
