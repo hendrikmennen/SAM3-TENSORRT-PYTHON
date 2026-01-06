@@ -1,0 +1,17 @@
+hf download --local-dir "Onnx-Models" kishanstar2003/SAM3_ONNX_FP16
+
+Also if you want to manually export Onnx then:
+hf download facebook/sam3 --local-dir sam3
+python3 export.py --all --model-path ./sam3 --output-dir Onnx-Models-Opset-21 --device cuda
+
+
+Export Engines command : python3 build.py --onnx "Onnx-Models" --engine "Engines"
+
+Also Copy tokenizer.json from Onnx-Models Download Dir to Engines dir
+
+Check if System is Ready by : python3 Check.py
+RUN INFERENCE COMMAND : python3 SAM3_TensorRT_Inference.py --input "Assets/Test.jpg" --prompt "person" --conf 0.7 --output result.jpg --models ./Engines
+ 
+
+CREDITS TO : https://github.com/jamjamjon/usls/tree/main/scripts/sam3-image
+             https://github.com/facebookresearch/sam3
