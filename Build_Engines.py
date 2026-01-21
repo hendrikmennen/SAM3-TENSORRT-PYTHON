@@ -2,6 +2,7 @@ import os
 import subprocess
 import sys
 import argparse
+import shutil
 
 def build_engines(onnx_dir, engine_dir):
     """Builds TensorRT engines from ONNX models found in onnx_dir."""
@@ -30,9 +31,30 @@ def build_engines(onnx_dir, engine_dir):
         print(f"[INIT] Creating output directory: {engine_dir}")
         os.makedirs(engine_dir)
         
+    # --- Task: Copy tokenizer.json ---
+    tokenizer_src = os.path.join(onnx_dir, "tokenizer.json")
+    tokenizer_dst = os.path.join(engine_dir, "tokenizer.json")
+
+    # Only copy if source exists
+    if os.path.exists(tokenizer_src):
+        # Only copy if destination does NOT exist (avoid overwriting)
+        if not os.path.exists(tokenizer_dst):
+            print(f"[COPY] Copying tokenizer.json to {engine_dir}...")
+            try:
+                shutil.copy2(tokenizer_src, tokenizer_dst)
+                print("[SUCCESS] tokenizer.json copied.")
+            except Exception as e:
+                print(f"[ERROR] Failed to copy tokenizer.json: {e}")
+        else:
+            print(f"[SKIP] tokenizer.json already exists in destination.")
+    else:
+        print(f"[WARNING] tokenizer.json not found in {onnx_dir}, skipping copy.")
+
+    # --- Task: Build Engines ---
     for name, config in models.items():
         engine_path = os.path.join(engine_dir, f"{name}.engine")
 
+        # CHECK: If engine already exists, skip re-exporting
         if os.path.exists(engine_path):
             print(f"[SKIP] {name}.engine already exists.")
             continue

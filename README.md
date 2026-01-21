@@ -6,8 +6,33 @@ This project provides a complete pipeline to run **SAM3** (Segment Anything Mode
 - **ONNX export** of the SAM3 submodules (`SAM3_PyTorch_To_Onnx.py`)
 - **TensorRT engine building** from ONNX (`Build_Engines.py`)
 - **High‑performance inference** with text prompts (`SAM3_TensorRT_Inference.py`)
+- **Interactive web UI** for easy testing (`ui_gradio.py`)
 
-The workflow is designed around FP16 TensorRT engines with dynamic shapes and explicit batch.
+The workflow is designed around FP16 TensorRT engines with dynamic shapes and explicit batch, supporting both **bounding box detection** and **mask segmentation** modes.
+
+---
+
+## Quick Start
+
+1. **Install dependencies** (see section 1 for details):
+   ```bash
+   pip install torch torchvision onnx onnxruntime-gpu transformers tokenizers opencv-python gradio
+   ```
+
+2. **Download pre-exported ONNX models**:
+   ```bash
+   hf download --local-dir "Onnx-Models" kishanstar2003/SAM3_ONNX_FP16
+   ```
+
+3. **Build TensorRT engines**:
+   ```bash
+   python Build_Engines.py --onnx "Onnx-Models" --engine "Engines"
+   cp Onnx-Models/tokenizer.json Engines/
+   ```
+
+4. **Run inference** (choose one):
+   - **Web UI**: `python ui_gradio.py`
+   - **Command line**: `python SAM3_TensorRT_Inference.py --input "Assets/Test.jpg" --prompt "person" --output result.jpg`
 
 ---
 
@@ -48,7 +73,7 @@ You have two options: **download pre‑exported ONNX** or **export from PyTorch 
 
 ### 2.1. Download pre‑exported ONNX (recommended)
 
-From `Export Instrcutions.txt`:
+From `Instrcutions.txt`:
 
 ```bash
 hf download --local-dir "Onnx-Models" kishanstar2003/SAM3_ONNX_FP16
@@ -150,8 +175,13 @@ Run this once after setup to confirm everything is wired correctly.
 
 ## 5. Run TensorRT Inference
 
-With engines and tokenizer in place, run the end‑to‑end inference script:
+With engines and tokenizer in place, you can run inference in two ways: **command line** or **interactive web UI**.
 
+### 5.1. Command Line Inference
+
+Run the end‑to‑end inference script:
+
+**Bounding Box Detection Mode:**
 ```bash
 python SAM3_TensorRT_Inference.py \
   --input "Assets/Test.jpg" \
@@ -161,6 +191,17 @@ python SAM3_TensorRT_Inference.py \
   --models ./Engines
 ```
 
+**Mask Segmentation Mode:**
+```bash
+python SAM3_TensorRT_Inference.py \
+  --input "Assets/Test.jpg" \
+  --prompt "person" \
+  --conf 0.7 \
+  --output result.jpg \
+  --models ./Engines \
+  --segment
+```
+
 Arguments:
 
 - `--input`: path to input image file.
@@ -168,6 +209,24 @@ Arguments:
 - `--conf`: confidence threshold \(0.0–1.0\) applied on box scores.
 - `--output`: path to save the annotated image.
 - `--models`: directory containing `.engine` files and `tokenizer.json` (typically `Engines`).
+- `--segment`: (optional) enable mask segmentation mode. If omitted, uses bounding box detection.
+
+### 5.2. Interactive Web UI
+
+For easier testing and experimentation, use the Gradio web interface:
+
+```bash
+python ui_gradio.py
+```
+
+This launches a web interface where you can:
+- Upload images directly
+- Enter text prompts interactively
+- Adjust confidence thresholds with sliders
+- Toggle between bounding box and segmentation modes
+- View results instantly with performance metrics
+
+The UI automatically loads the TensorRT engines from the `Engines` directory and provides real-time inference.
 
 What the script does:
 
@@ -180,10 +239,12 @@ What the script does:
   - Text encoder → token embeddings + masks (via `tokenizers` and `tokenizer.json`)
   - Decoder → predicted boxes, logits, presence logits, and masks
 - Computes combined scores from logits and presence logits, filters by `--conf`, denormalizes boxes, and draws them onto the original image.
+- **Bounding Box Mode**: Draws rectangular boxes around detected objects
+- **Segmentation Mode**: Generates and overlays pixel-accurate masks for detected objects
 
 Output:
 
-- An image with bounding boxes and scores, saved to `--output`.
+- An image with bounding boxes/masks and scores, saved to `--output`.
 
 ---
 
@@ -198,7 +259,10 @@ Output:
   Converts ONNX models into TensorRT `.engine` files using `trtexec` with FP16 and explicit shapes.
 
 - `SAM3_TensorRT_Inference.py`  
-  Runs **standalone TensorRT inference** with text prompts and saves visualized detections.
+  Runs **standalone TensorRT inference** with text prompts and saves visualized detections. Supports both bounding box and mask segmentation modes.
+
+- `ui_gradio.py`  
+  **Interactive web interface** built with Gradio for easy testing and experimentation. Provides real-time inference with adjustable parameters.
 
 - `Check.py`  
   System diagnostic script for GPU, CUDA, TensorRT, and ONNX Runtime.
@@ -206,18 +270,38 @@ Output:
 - `Requirements_Install_Commands.txt`  
   Reference commands for Python and TensorRT stack installation (primarily Linux).
 
-- `Export Instrcutions.txt`  
-  Quick reference for downloading/exporting ONNX, building engines, and running inference.
+- `Instrcutions.txt`  
+  Quick reference for downloading/exporting ONNX, building engines, and running inference commands.
 
 - `Assets/Test.jpg`  
   Example input image for testing the pipeline.
 
 ---
 
-## 7. Credits
+## 7. Troubleshooting
+
+**Common Issues:**
+
+- **"CUDA out of memory"**: Reduce batch size or use smaller input images
+- **"TensorRT engine not found"**: Ensure you've run `Build_Engines.py` and copied `tokenizer.json`
+- **"trtexec not found"**: Add TensorRT bin directory to your PATH
+- **Import errors**: Run `python Check.py` to verify your environment setup
+- **Slow inference**: Ensure you're using GPU-enabled ONNX Runtime and TensorRT engines
+
+**Performance Tips:**
+
+- Use FP16 engines for better performance (default in this pipeline)
+- Ensure input images are reasonably sized (the model resizes to 1008×1008 internally)
+- For batch processing, consider modifying the inference script to process multiple images
+
+---
+
+## 8. Credits
 
 This work is adapted from and inspired by:
 
-- `https://github.com/jamjamjon/usls/tree/main/scripts/sam3-image`
-- `https://github.com/facebookresearch/sam3`
+- **Original SAM3 implementation**: [facebook/sam3](https://github.com/facebookresearch/sam3)
+- **TensorRT optimization techniques**: [jamjamjon/usls SAM3 scripts](https://github.com/jamjamjon/usls/tree/main/scripts/sam3-image)
+
+Special thanks to the contributors of these projects for their foundational work in making SAM3 accessible and optimized for deployment.
 
