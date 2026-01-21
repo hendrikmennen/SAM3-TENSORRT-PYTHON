@@ -11,7 +11,7 @@ This project provides a complete pipeline to run **SAM3** (Segment Anything Mode
 The workflow is designed around FP16 TensorRT engines with dynamic shapes and explicit batch, supporting both **bounding box detection** and **mask segmentation** modes.
 
 ![SAM3 UI](SAM3_UI.png)
-
+![WORKFLOW](WorkFlow.png)
 ---
 
 ## Quick Start
