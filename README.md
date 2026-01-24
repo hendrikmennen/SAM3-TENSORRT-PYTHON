@@ -30,10 +30,7 @@ By migrating from native PyTorch to TensorRT (FP16), this pipeline delivers mass
 
 ## Quick Start
 
-1. **Install dependencies** (see section 1 for details):
-   ```bash
-   Refer Section 1
-   ```
+1. **Install dependencies** (see Environment Setup):
 
 2. **Download pre-exported ONNX models**:
    ```bash
