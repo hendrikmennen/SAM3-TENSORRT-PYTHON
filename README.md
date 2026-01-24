@@ -159,6 +159,22 @@ Key points:
 - All exports use **opset 17** and **dynamic batch / prompt dimensions**, compatible with TensorRT.
 - The `--size 1008` parameter sets the resolution for the exported models.
 
+**Changing Resolution:**
+
+If you want to use a different resolution (e.g., 644), simply change the `--size` parameter when exporting ONNX:
+
+```bash
+python3 SAM3_PyTorch_To_Onnx.py --all --model-path "sam3" --output-dir "Onnx-Models" --device cuda --size 644
+```
+
+Then rebuild the engines using the same command as before:
+
+```bash
+python3 Build_Engines.py --onnx "Onnx-Models" --engine "Engines"
+```
+
+The engine building command remains the same regardless of resolution.
+
 ---
 
 ## 3. Build TensorRT Engines
