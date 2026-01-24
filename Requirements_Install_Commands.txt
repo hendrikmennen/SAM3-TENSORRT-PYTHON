@@ -1,3 +1,5 @@
+pip install "transformers@git+https://github.com/huggingface/transformers@2a61590a479d3b1f77059f75caee7cc22760019d" -> Only Required if you want to export Onnx from Original SAM3 of HuggingFace Repo
+
 pip install torch torchvision --upgrade
 pip install "transformers@git+https://github.com/huggingface/transformers@2a61590a479d3b1f77059f75caee7cc22760019d"
 pip install onnx onnxscript onnxslim onnxruntime-gpu onnx_graphsurgeon opencv-python matplotlib tokenizers --upgrade
