@@ -1,15 +1,12 @@
-pip install "transformers@git+https://github.com/huggingface/transformers@2a61590a479d3b1f77059f75caee7cc22760019d" -> Only Required if you want to export Onnx from Original SAM3 of HuggingFace Repo
+pip install "git+https://github.com/huggingface/transformers" -> Only Required if you want to export Onnx from Original SAM3 of HuggingFace Repo
 
 pip install torch torchvision --upgrade
-pip install "transformers@git+https://github.com/huggingface/transformers@2a61590a479d3b1f77059f75caee7cc22760019d"
+pip install "git+https://github.com/huggingface/transformers"
 pip install onnx onnxscript onnxslim onnxruntime-gpu onnx_graphsurgeon opencv-python matplotlib tokenizers --upgrade
 pip install nvidia-modelopt "numpy>=2.2.6" "protobuf>=4.25.1" nvidia-ml-py gradio --upgrade
 pip uninstall opencv-python opencv-contrib-python opencv-python-headless -y
 pip install opencv-python 
 
-
-
-USE CUDA-PYTHON VERSION MATCHING THE CUDA TOOLKIT VERSION OTHERWISE CUDA-PYTHON WONT WORK
 
 MAKE SURE TENSORRT IS INSTALLED AND ADDED TO PATH 
 
