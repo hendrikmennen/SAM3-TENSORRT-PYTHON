@@ -234,12 +234,12 @@ Run the end‑to‑end inference script:
 
 **Bounding Box Detection Mode:**
 ```bash
-python SAM3_TensorRT_Inference.py --input "Assets/Test.jpg" --prompt "person" --conf 0.7 --output result.jpg --models "Engines"
+python SAM3_TensorRT_Inference.py --input "Assets/Test.jpg" --prompt "person" --conf 0.8 --output result.jpg --models "Engines"
 ```
 
 **Mask Segmentation Mode:**
 ```bash
-python SAM3_TensorRT_Inference.py --input "Assets/Test.jpg" --prompt "person" --conf 0.7 --output result.jpg --models "Engines" --segment
+python SAM3_TensorRT_Inference.py --input "Assets/Test.jpg" --prompt "person" --conf 0.8 --output result.jpg --models "Engines" --segment
 ```
 
 Arguments:
