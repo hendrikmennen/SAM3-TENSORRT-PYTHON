@@ -272,14 +272,8 @@ Output:
 - **"CUDA out of memory"**: Reduce batch size or use smaller input images
 - **"TensorRT engine not found"**: Ensure you've run `Build_Engines.py` and copied `tokenizer.json`
 - **"trtexec not found"**: Add TensorRT bin directory to your PATH
-- **Import errors**: Run `python Check.py` to verify your environment setup
+- **Import errors**: Run `python3 Check.py` to verify your environment setup
 - **Slow inference**: Ensure you're using GPU-enabled ONNX Runtime and TensorRT engines
-
-**Performance Tips:**
-
-- Use FP16 engines for better performance (default in this pipeline)
-- Ensure input images are reasonably sized (the model resizes to 1008×1008 internally)
-- For batch processing, consider modifying the inference script to process multiple images
 
 ---
 
