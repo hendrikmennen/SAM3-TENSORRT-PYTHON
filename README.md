@@ -64,15 +64,7 @@ Use the provided commands in `Requirements_Install_Commands.txt` (Linux‑orient
 Example (adapt from the text file as needed for your OS):
 
 ```bash
-pip install torch torchvision --upgrade
-pip uninstall torchaudio -y
-pip install litserve uvicorn python-multipart
-pip install onnx onnxscript onnxslim onnxruntime-gpu "numpy>=2.2.6" opencv-python \
-    "transformers" \
-    matplotlib aiohttp locust pandas tabulate cuda-python==12.8.0 --upgrade
-pip install tritonclient[http] opencv-python-headless tokenizers
-pip install nvidia-modelopt "numpy>=2.2.6" tensorboard scikit-learn "protobuf>=4.25.1"
-pip install onnx_graphsurgeon
+Refer @Instructions.txt
 ```
 
 **TensorRT**
