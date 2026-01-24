@@ -62,7 +62,7 @@ This will create an `Onnx-Models` directory containing:
 - `text-encoder.onnx`
 - `geometry-encoder.onnx`
 - `decoder.onnx`
-- `tokenizer.json` (copy later to the engines directory)
+- `tokenizer.json` (auto copied to the engines directory)
 
 ### 2.2. Export ONNX from the SAM3 PyTorch model
 
