@@ -41,26 +41,8 @@ def audit_system_specs():
     else:
         print("nvidia-smi:         ❌ Failed to query (Driver likely missing)")
 
-    # 2. CUDA Python (cudart) Test
-    print(f"\n--- CUDA Python (cudart) ---")
-    if CUDA_PYTHON_AVAILABLE:
-        # Check CUDART version
-        err, version = cudart.cudaRuntimeGetVersion()
-        if err == 0:
-            print(f"CUDART Version:     {version}")
-        
-        # Test functional device access
-        err, count = cudart.cudaGetDeviceCount()
-        if err == 0 and count > 0:
-            err, props = cudart.cudaGetDeviceProperties(0)
-            device_name = props.name.decode('utf-8') if err == 0 else "Unknown"
-            print(f"CUDART Status:      ✅ Functional (Found {count} device: {device_name})")
-        else:
-            print(f"CUDART Status:      ⚠️ No devices found or Error Code: {err}")
-    else:
-        print(f"CUDART Status:      ❌ 'cuda-python' package not installed")
 
-    # 3. Compiler (NVCC)
+    # 2. Compiler (NVCC)
     print(f"\n--- Compiler (NVCC) ---")
     # Try 1: Standard command
     nvcc_out = run_shell("nvcc --version")
@@ -75,7 +57,7 @@ def audit_system_specs():
     else:
         print("NVCC Status:        ❌ Not found (Tried 'nvcc' and '/usr/local/cuda/bin/nvcc')")
 
-    # 4. Python & PyTorch Stack
+    # 3. Python & PyTorch Stack
     print(f"\n--- Core Python Stack ---")
     print(f"Python:             {sys.version.split()[0]}")
     print(f"PyTorch:            {torch.__version__}")

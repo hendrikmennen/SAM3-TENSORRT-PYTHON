@@ -7,12 +7,11 @@ import torch
 import tensorrt as trt
 import pynvml  
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Tuple
 from tokenizers import Tokenizer
 from PIL import Image as PILImage
 
 # --- Constants ---
-TARGET_SIZE = 1008
 PURPLE_COLOR = (255, 71, 151) 
 
 class TRTModule:
@@ -29,15 +28,27 @@ class TRTModule:
 
         self.context = self.engine.create_execution_context()
         self.stream = torch.cuda.Stream()
-        self.io_info = {self.engine.get_tensor_name(i): {
-            "mode": self.engine.get_tensor_mode(self.engine.get_tensor_name(i)),
-            "dtype": self.engine.get_tensor_dtype(self.engine.get_tensor_name(i))
-        } for i in range(self.engine.num_io_tensors)}
+        
+        # Parse IO info
+        self.io_info = {}
+        for i in range(self.engine.num_io_tensors):
+            name = self.engine.get_tensor_name(i)
+            self.io_info[name] = {
+                "mode": self.engine.get_tensor_mode(name),
+                "dtype": self.engine.get_tensor_dtype(name),
+                "shape": self.engine.get_tensor_shape(name) # Store shape here
+            }
 
     def _trt_dtype_to_torch(self, trt_dtype):
         mapping = {trt.float32: torch.float32, trt.float16: torch.float16,
                    trt.int32: torch.int32, trt.int64: torch.int64, trt.bool: torch.bool}
         return mapping.get(trt_dtype, torch.float32)
+
+    def get_tensor_shape(self, name: str) -> Tuple:
+        """Helper to retrieve the shape of a specific tensor by name."""
+        if name in self.io_info:
+            return tuple(self.io_info[name]["shape"])
+        raise KeyError(f"Tensor '{name}' not found in engine.")
 
     def __call__(self, **inputs: np.ndarray) -> Dict[str, np.ndarray]:
         torch_outputs = {}
@@ -50,6 +61,7 @@ class TRTModule:
 
         for name, info in self.io_info.items():
             if info["mode"] == trt.TensorIOMode.OUTPUT:
+                # Retrieve dynamic output shape
                 shape = tuple(self.context.get_tensor_shape(name))
                 dtype = self._trt_dtype_to_torch(info["dtype"])
                 out_tensor = torch.empty(shape, dtype=dtype, device='cuda')
@@ -74,6 +86,28 @@ class Sam3Inference:
         self.text_encoder = TRTModule(str(self._find("text-encoder", suffix)))
         self.decoder = TRTModule(str(self._find("decoder", suffix)))
 
+        # --- AUTO-DETECT RESOLUTION ---
+        try:
+            # We look for the 'images' input tensor in the vision encoder
+            # Shape is typically (Batch, Channels, Height, Width) -> e.g., (1, 3, 1024, 1024)
+            input_shape = self.vision_encoder.get_tensor_shape("images")
+            
+            # Assuming NCHW format (standard for PyTorch/TRT vision models)
+            if len(input_shape) == 4:
+                self.target_h = input_shape[2]
+                self.target_w = input_shape[3]
+            else:
+                # Fallback if shape is weird
+                print(f"[WARN] Unexpected input shape {input_shape}. Defaulting to 1024.")
+                self.target_h = self.target_w = 1024
+
+            print(f"[INFO] Auto-detected input resolution: {self.target_w}x{self.target_h}")
+            
+        except KeyError:
+            print("[WARN] Could not find tensor 'images' to determine resolution. Defaulting to 1024.")
+            self.target_h = self.target_w = 1024
+        # ------------------------------
+
         tokenizer_path = self.model_dir / "tokenizer.json"
         if not tokenizer_path.exists():
             raise FileNotFoundError(f"tokenizer.json missing in {model_dir}")
@@ -91,16 +125,9 @@ class Sam3Inference:
         return target
 
     def _get_gpu_memory_pynvml(self):
-        """
-        Uses nvidia-ml-py to get exact memory usage for this process.
-        Robustly handles cases where NVML returns None.
-        """
         try:
             pynvml.nvmlInit()
-            # Assuming GPU 0
             handle = pynvml.nvmlDeviceGetHandleByIndex(0) 
-            
-            # Get list of all processes on this GPU
             procs = pynvml.nvmlDeviceGetComputeRunningProcesses(handle)
             graphics_procs = pynvml.nvmlDeviceGetGraphicsRunningProcesses(handle)
             procs.extend(graphics_procs)
@@ -108,22 +135,13 @@ class Sam3Inference:
             my_pid = os.getpid()
             for p in procs:
                 if p.pid == my_pid:
-                    # Check if usedGpuMemory is available
-                    if p.usedGpuMemory is None:
-                        continue
-
-                    # p.usedGpuMemory is in bytes
+                    if p.usedGpuMemory is None: continue
                     mem_mb = p.usedGpuMemory / (1024 ** 2)
                     pynvml.nvmlShutdown()
                     return mem_mb
-            
             pynvml.nvmlShutdown()
-            
         except Exception:
-            # If NVML fails (common on Windows), we silently fall back to PyTorch
             pass
-
-        # Fallback to pytorch reserved
         return torch.cuda.max_memory_reserved() / (1024 ** 2)
 
     def run(self, img_path, prompt, conf, out_path, segment=False):
@@ -134,7 +152,8 @@ class Sam3Inference:
         h, w = orig.shape[:2]
         rgb = cv2.cvtColor(orig, cv2.COLOR_BGR2RGB)
         
-        pil_img = PILImage.fromarray(rgb).resize((TARGET_SIZE, TARGET_SIZE), PILImage.BILINEAR)
+        # USE DYNAMIC SIZE HERE
+        pil_img = PILImage.fromarray(rgb).resize((self.target_w, self.target_h), PILImage.BILINEAR)
         pixel_values = (np.array(pil_img).astype(np.float32) / 127.5 - 1.0).transpose(2,0,1)[None]
 
         # Warmup / Sync
@@ -174,7 +193,6 @@ class Sam3Inference:
         torch.cuda.synchronize()
         t1 = time.time()
         
-        # Capture Exact Memory via NVML
         exact_mem_mb = self._get_gpu_memory_pynvml()
         inference_time = (t1 - t0) * 1000
 
@@ -183,7 +201,6 @@ class Sam3Inference:
         color = PURPLE_COLOR
 
         if segment:
-            # Mode: Segmentation (Masks + Labels)
             overlay = orig.copy()
             for i, box in enumerate(boxes):
                 mask_prob = 1 / (1 + np.exp(-masks[i]))
@@ -198,7 +215,6 @@ class Sam3Inference:
                 x1, y1, x2, y2 = (box * [w, h, w, h]).astype(int)
                 self._draw_label(orig, prompt, x1, y1, color)
         else:
-            # Mode: Detection (Boxes + Labels)
             for box in boxes:
                 x1, y1, x2, y2 = (box * [w, h, w, h]).astype(int)
                 cv2.rectangle(orig, (x1, y1), (x2, y2), color, 2)
@@ -209,6 +225,7 @@ class Sam3Inference:
         print("-" * 50)
         print(f"| Metric                | Value            |")
         print(f"|-----------------------|------------------|")
+        print(f"| Input Res             | {self.target_w}x{self.target_h}          |")
         print(f"| Inference Time        | {inference_time:.2f} ms        |")
         print(f"| GPU Memory (Process)  | {exact_mem_mb / 1024:.2f} GB          |")
         print("-" * 50)
@@ -233,7 +250,7 @@ if __name__ == "__main__":
     parser.add_argument("--conf", type=float, default=0.5, help="Confidence threshold")
     parser.add_argument("--output", default="output.jpg", help="Path to save the output image")
     parser.add_argument("--models", default="Engines", help="Directory containing .engine files")
-    parser.add_argument("--segment", action="store_true", help="Use segmentation masks. If omitted, uses Bounding Boxes.")
+    parser.add_argument("--segment", action="store_true", help="Use segmentation masks.")
     
     args = parser.parse_args()
 

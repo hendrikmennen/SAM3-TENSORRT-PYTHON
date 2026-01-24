@@ -73,29 +73,37 @@ class VisionEncoderWrapper(nn.Module):
         patch_size = backbone.config.patch_size
         self.height_patches = image_size // patch_size
         self.width_patches = image_size // patch_size
-        hidden_size = backbone.config.hidden_size
+        self.hidden_size = backbone.config.hidden_size  # FIX: Defined correctly here
 
         # Pre-compute ViT position embeddings
         orig_pos_embed = backbone.embeddings.position_embeddings.data
         pretrain_size = int(orig_pos_embed.shape[1] ** 0.5)
 
+        # FIX: Using self.hidden_size
         pos_embed = orig_pos_embed.reshape(
-            1, pretrain_size, pretrain_size, hidden_size
+            1, pretrain_size, pretrain_size, self.hidden_size
         ).permute(0, 3, 1, 2)
+        
         repeat_h = self.height_patches // pretrain_size + 1
         repeat_w = self.width_patches // pretrain_size + 1
         pos_embed = pos_embed.tile([1, 1, repeat_h, repeat_w])[
             :, :, : self.height_patches, : self.width_patches
         ]
+        
+        # FIX: Using self.hidden_size
         pos_embed = pos_embed.permute(0, 2, 3, 1).reshape(
-            1, self.height_patches * self.width_patches, hidden_size
+            1, self.height_patches * self.width_patches, self.hidden_size
         )
         self.register_buffer("vit_pos_embed", pos_embed.to(device))
 
         # Pre-compute FPN sine position encoding (only need level 2)
         num_pos_feats = sam3_model.vision_encoder.neck.config.fpn_hidden_size // 2
+        
+        # CRITICAL FIX: Use self.height_patches directly (matches ViT output grid exactly)
+        feat = self.height_patches
+
         pos_enc_2 = compute_sine_position_encoding(
-            shape=(1, 256, 72, 72),
+            shape=(1, 256, feat, feat),
             device=device,
             dtype=torch.float32,
             num_pos_feats=num_pos_feats,
@@ -127,12 +135,12 @@ class VisionEncoderWrapper(nn.Module):
 
         # Only return required outputs: fpn_feat_0/1/2 + fpn_pos_2
         return (
-            fpn_hidden_states[0],  # [B, 256, 288, 288] for Decoder
-            fpn_hidden_states[1],  # [B, 256, 144, 144] for Decoder
-            fpn_hidden_states[2],  # [B, 256, 72, 72] for GE & Decoder
+            fpn_hidden_states[0],  # [B, 256, 4*feat, 4*feat]
+            fpn_hidden_states[1],  # [B, 256, 2*feat, 2*feat]
+            fpn_hidden_states[2],  # [B, 256, feat, feat]
             self.pos_enc_2.expand(
                 batch_size, -1, -1, -1
-            ),  # [B, 256, 72, 72] for GE & Decoder
+            ),  # [B, 256, feat, feat]
         )
 
 
@@ -345,13 +353,15 @@ class DecoderWrapper(nn.Module):
         )
 
 
-def export_vision_encoder(model: Sam3Model, output_dir: Path, device: str = "cuda"):
-    print("Exporting Vision Encoder...")
-    wrapper = VisionEncoderWrapper(model, device=device).to(device).eval()
+def export_vision_encoder(model: Sam3Model, output_dir: Path, device: str = "cuda", image_size: int = 1008):
+    print(f"Exporting Vision Encoder (Input: {image_size}x{image_size})...")
+    # Pass image_size to wrapper
+    wrapper = VisionEncoderWrapper(model, device=device, image_size=image_size).to(device).eval()
 
     torch.onnx.export(
         wrapper,
-        (torch.randn(1, 3, 1008, 1008, device=device),),
+        # Use image_size for input tensor
+        (torch.randn(1, 3, image_size, image_size, device=device),),
         str(output_dir / "vision-encoder.onnx"),
         input_names=["images"],
         output_names=["fpn_feat_0", "fpn_feat_1", "fpn_feat_2", "fpn_pos_2"],
@@ -369,7 +379,8 @@ def export_vision_encoder(model: Sam3Model, output_dir: Path, device: str = "cud
     print(f"  ✓ Saved: {output_dir / 'vision-encoder.onnx'}")
 
 
-def export_text_encoder(model: Sam3Model, output_dir: Path, device: str = "cuda"):
+def export_text_encoder(model: Sam3Model, output_dir: Path, device: str = "cuda", image_size: int = 1008):
+    # Added image_size to signature to match others, but it is ignored
     print("Exporting Text Encoder...")
     wrapper = TextEncoderWrapper(model).to(device).eval()
 
@@ -395,17 +406,20 @@ def export_text_encoder(model: Sam3Model, output_dir: Path, device: str = "cuda"
     print(f"  ✓ Saved: {output_dir / 'text-encoder.onnx'}")
 
 
-def export_geometry_encoder(model: Sam3Model, output_dir: Path, device: str = "cuda"):
+def export_geometry_encoder(model: Sam3Model, output_dir: Path, device: str = "cuda", image_size: int = 1008):
     print("Exporting Geometry Encoder...")
     wrapper = GeometryEncoderWrapper(model).to(device).eval()
+
+    # Calculate feature size for dummy inputs
+    feat = image_size // 14
 
     torch.onnx.export(
         wrapper,
         (
             torch.rand(1, 5, 4, device=device),
             torch.ones(1, 5, dtype=torch.long, device=device),
-            torch.randn(1, 256, 72, 72, device=device),
-            torch.randn(1, 256, 72, 72, device=device),
+            torch.randn(1, 256, feat, feat, device=device),
+            torch.randn(1, 256, feat, feat, device=device),
         ),
         str(output_dir / "geometry-encoder.onnx"),
         input_names=["input_boxes", "input_boxes_labels", "fpn_feat_2", "fpn_pos_2"],
@@ -425,18 +439,23 @@ def export_geometry_encoder(model: Sam3Model, output_dir: Path, device: str = "c
     print(f"  ✓ Saved: {output_dir / 'geometry-encoder.onnx'}")
 
 
-def export_decoder(model: Sam3Model, output_dir: Path, device: str = "cuda"):
+def export_decoder(model: Sam3Model, output_dir: Path, device: str = "cuda", image_size: int = 1008):
     print("Exporting Decoder...")
     wrapper = DecoderWrapper(model).to(device).eval()
+
+    # Calculate dynamic pyramid sizes
+    feat2 = image_size // 14
+    feat1 = feat2 * 2
+    feat0 = feat2 * 4
 
     torch.onnx.export(
         wrapper,
         (
-            torch.randn(1, 256, 288, 288, device=device),
-            torch.randn(1, 256, 144, 144, device=device),
-            torch.randn(1, 256, 72, 72, device=device),
-            torch.randn(1, 256, 72, 72, device=device),
-            torch.randn(1, 32, 256, device=device),
+            torch.randn(1, 256, feat0, feat0, device=device),
+            torch.randn(1, 256, feat1, feat1, device=device),
+            torch.randn(1, 256, feat2, feat2, device=device),
+            torch.randn(1, 256, feat2, feat2, device=device),
+            torch.rand(1, 32, 256, device=device), # Prompt features usually 256 dim
             torch.ones(1, 32, dtype=torch.bool, device=device),
         ),
         str(output_dir / "decoder.onnx"),
@@ -480,6 +499,12 @@ def main():
     parser.add_argument(
         "--output-dir", type=str, default="onnx-models", help="Output directory"
     )
+    parser.add_argument(
+        "--size",
+        type=int,
+        default=1008,
+        help="Input image size (must be divisible by patch size, e.g. 1008, 768, 644)",
+    )
     parser.add_argument("--device", type=str, default="cpu")
     args = parser.parse_args()
 
@@ -502,7 +527,7 @@ def main():
                 "text": export_text_encoder,
                 "geometry": export_geometry_encoder,
                 "decoder": export_decoder,
-            }[m](model, output_dir, args.device)
+            }[m](model, output_dir, args.device, args.size)
 
     print(f"\n✓ Export complete! Models saved to: {output_dir}")
 

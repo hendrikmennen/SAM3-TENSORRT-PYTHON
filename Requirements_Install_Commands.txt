@@ -1,4 +1,4 @@
-pip install "git+https://github.com/huggingface/transformers" -> Only Required if you want to export Onnx from Original SAM3 of HuggingFace Repo
+pip install "git+https://github.com/huggingface/transformers" -> Also Required If You Want To Manually Export Onnx For Different Resolution
 
 pip install torch torchvision --upgrade
 pip install "git+https://github.com/huggingface/transformers"

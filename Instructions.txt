@@ -1,16 +1,18 @@
-hf download --local-dir "Onnx-Models" kishanstar2003/SAM3_ONNX_FP16
+Check if System is Ready by : python3 Check.py
 
-Also if you want to manually export Onnx then:
-hf download facebook/sam3 --local-dir sam3
-python3 SAM3_PyTorch_To_Onnx.py --all --model-path "sam3" --output-dir "Onnx-Models" --device cuda
+Prebuilt Onnx with Resolution 1008 Download Link : hf download --local-dir "Onnx-Models" kishanstar2003/SAM3_ONNX_FP16
+
+Also Required If You Want To Manually Export Onnx For Different Resolution:
+1) Donwload SAM3 PyTorch : hf download facebook/sam3 --local-dir sam3
+2) Patch transformers code : python3 patch_sam3_interp_rope.py
+3) Export Onnx : python3 SAM3_PyTorch_To_Onnx.py --all --model-path "sam3" --output-dir "Onnx-Models" --device cuda --size 1008
 
 Export Engines command : python3 Build_Engines.py --onnx "Onnx-Models" --engine "Engines"
 
-Check if System is Ready by : python3 Check.py
 
 RUN INFERENCE COMMAND : 
-FOR BBOX MODE : python3 SAM3_TensorRT_Inference.py --input "Assets/Test.jpg" --prompt "person" --conf 0.7 --output result.jpg --models "Engines"
-FOR MASK SEGMENTATION MODE : python3 SAM3_TensorRT_Inference.py --input "Assets/Test.jpg" --prompt "person" --conf 0.7 --output result.jpg --models "Engines" --segment
+FOR Bounding Box MODE : python3 SAM3_TensorRT_Inference.py --input "Assets/Test.jpg" --prompt "person" --conf 0.8 --output result.jpg --models "Engines"
+FOR MASK SEGMENTATION MODE : python3 SAM3_TensorRT_Inference.py --input "Assets/Test.jpg" --prompt "person" --conf 0.8 --output result.jpg --models "Engines" --segment
  
 FOR INFERENCE BY UI: python3 ui_gradio.py
 
