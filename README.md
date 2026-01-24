@@ -30,24 +30,6 @@ By migrating from native PyTorch to TensorRT (FP16), this pipeline delivers mass
 
 ## Quick Start
 
-1. **Install dependencies** (see Environment Setup):
-
-2. **Download pre-exported ONNX models**:
-   ```bash
-   hf download --local-dir "Onnx-Models" kishanstar2003/SAM3_ONNX_FP16
-   ```
-
-3. **Build TensorRT engines**:
-   ```bash
-   python3 Build_Engines.py --onnx "Onnx-Models" --engine "Engines"
-   ```
-
-4. **Run inference** (choose one):
-   - **Web UI**: `python3 ui_gradio.py`
-   - **Command line**: `python3 SAM3_TensorRT_Inference.py --input "Assets/Test.jpg" --prompt "person" --output result.jpg --segment`
-
----
-
 ## 1. Environment Setup
 
 **Python packages**
