@@ -32,7 +32,7 @@ By migrating from native PyTorch to TensorRT (FP16), this pipeline delivers mass
 
 1. **Install dependencies** (see section 1 for details):
    ```bash
-   pip install torch torchvision onnx onnxruntime-gpu transformers tokenizers opencv-python gradio
+   Refer Section 1
    ```
 
 2. **Download pre-exported ONNX models**:
@@ -42,13 +42,12 @@ By migrating from native PyTorch to TensorRT (FP16), this pipeline delivers mass
 
 3. **Build TensorRT engines**:
    ```bash
-   python Build_Engines.py --onnx "Onnx-Models" --engine "Engines"
-   cp Onnx-Models/tokenizer.json Engines/
+   python3 Build_Engines.py --onnx "Onnx-Models" --engine "Engines"
    ```
 
 4. **Run inference** (choose one):
-   - **Web UI**: `python ui_gradio.py`
-   - **Command line**: `python SAM3_TensorRT_Inference.py --input "Assets/Test.jpg" --prompt "person" --output result.jpg`
+   - **Web UI**: `python3 ui_gradio.py`
+   - **Command line**: `python3 SAM3_TensorRT_Inference.py --input "Assets/Test.jpg" --prompt "person" --output result.jpg --segment`
 
 ---
 
@@ -97,9 +96,9 @@ hf download facebook/sam3 --local-dir sam3
 2. Run the ONNX export script (`SAM3_PyTorch_To_Onnx.py` is a self‑contained exporter):
 
 ```bash
-python SAM3_PyTorch_To_Onnx.py --all \
-  --model-path ./sam3 \
-  --output-dir Onnx-Models \
+python3 SAM3_PyTorch_To_Onnx.py --all \
+  --model-path "sam3" \
+  --output-dir "Onnx-Models" \
   --device cuda
 ```
 
@@ -119,7 +118,7 @@ Key points:
 Once you have the ONNX models in `Onnx-Models`, build TensorRT engines using `Build_Engines.py`.
 
 ```bash
-python Build_Engines.py --onnx "Onnx-Models" --engine "Engines"
+python3 Build_Engines.py --onnx "Onnx-Models" --engine "Engines"
 ```
 
 Arguments:
@@ -137,17 +136,6 @@ The script:
   - `decoder`
 - Skips engines that already exist.
 
-After building:
-
-- Ensure `Engines` contains `vision-encoder.engine`, `text-encoder.engine`, `geometry-encoder.engine` (if used) and `decoder.engine`.
-- **Copy `tokenizer.json`** from `Onnx-Models` (or model download dir) into `Engines`:
-
-```bash
-cp Onnx-Models/tokenizer.json Engines/
-```
-
-On Windows, use the equivalent `copy` command in PowerShell or CMD.
-
 ---
 
 ## 4. Verify System & TensorRT Installation
@@ -155,7 +143,7 @@ On Windows, use the equivalent `copy` command in PowerShell or CMD.
 Use `Check.py` to audit your environment:
 
 ```bash
-python Check.py
+python3 Check.py
 ```
 
 It reports:
@@ -182,23 +170,23 @@ Run the end‑to‑end inference script:
 
 **Bounding Box Detection Mode:**
 ```bash
-python SAM3_TensorRT_Inference.py \
+python3 SAM3_TensorRT_Inference.py \
   --input "Assets/Test.jpg" \
   --prompt "person" \
   --conf 0.7 \
   --output result.jpg \
-  --models ./Engines
+  --models "Engines"
 ```
 
 **Mask Segmentation Mode:**
 ```bash
-python SAM3_TensorRT_Inference.py \
+python3 SAM3_TensorRT_Inference.py \
   --input "Assets/Test.jpg" \
   --prompt "person" \
   --conf 0.7 \
   --output result.jpg \
-  --models ./Engines \
-  --segment
+  --models "Engines" \
+  --segment 
 ```
 
 Arguments:
