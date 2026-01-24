@@ -56,16 +56,7 @@ By migrating from native PyTorch to TensorRT (FP16), this pipeline delivers mass
 
 **Python packages**
 
-Use the provided commands in `Requirements_Install_Commands.txt` (Linux‑oriented). At minimum you will need:
-
-- **Core**: `torch`, `torchvision`, `numpy`, `opencv-python`, `tokenizers`, `transformers`, `onnx`, `onnxruntime-gpu`
-- **Deployment / tooling**: `cuda-python`, `tensorrt` (Python bindings), `onnx_graphsurgeon`, `nvidia-modelopt`, etc.
-
-Example (adapt from the text file as needed for your OS):
-
-```bash
-Refer @Instructions.txt
-```
+Use the provided commands in `Requirements_Install_Commands.txt` (Linux‑oriented).
 
 **TensorRT**
 
