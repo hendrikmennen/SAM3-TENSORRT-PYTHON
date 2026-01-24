@@ -156,7 +156,7 @@ Key points:
   - `TextEncoderWrapper` → `text-encoder.onnx`
   - `GeometryEncoderWrapper` → `geometry-encoder.onnx`
   - `DecoderWrapper` → `decoder.onnx`
-- All exports use **opset 17** and **dynamic batch / prompt dimensions**, compatible with TensorRT.
+- All exports use **opset 20** and **dynamic batch / prompt dimensions**, compatible with TensorRT.
 - The `--size 1008` parameter sets the resolution for the exported models.
 
 **Changing Resolution:**
