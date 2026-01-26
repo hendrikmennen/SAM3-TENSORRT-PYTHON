@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Dict, Tuple
 from tokenizers import Tokenizer
 from PIL import Image as PILImage
+from tabulate import tabulate  
 
 # --- Constants ---
 PURPLE_COLOR = (255, 71, 151) 
@@ -188,13 +189,14 @@ class Sam3Inference:
                 self._draw_label(orig, prompt, x1, y1, color)
 
         cv2.imwrite(out_path, orig)
+  
+        table_data = [
+            ["Input Res", f"{self.target_w}x{self.target_h}"],
+            ["Inference Time", f"{inference_time:.2f} ms"],
+            ["Objects Found", len(boxes)]
+        ]
         
-        print("-" * 50)
-        print(f"| Metric                 | Value            |")
-        print(f"|------------------------|------------------|")
-        print(f"| Input Res              | {self.target_w}x{self.target_h}      |")
-        print(f"| Inference Time         | {inference_time:.2f} ms     |")
-        print("-" * 50)
+        print(tabulate(table_data, headers=["Metric", "Value"], tablefmt="fancy_grid"))
         print(f"[SUCCESS] Saved to {out_path}")
 
         return inference_time

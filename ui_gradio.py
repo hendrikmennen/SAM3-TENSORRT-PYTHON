@@ -4,7 +4,7 @@ import gradio as gr
 import tempfile
 import numpy as np
 import subprocess
-import atexit  # Added for exit cleanup
+import atexit
 from pathlib import Path
 from typing import Tuple, Optional, Union
 from gradio.themes.utils.fonts import GoogleFont
@@ -28,7 +28,7 @@ temp_files_registry = set()  # Tracks files for cleanup on exit
 def cleanup_on_exit():
     """Called automatically when the script terminates to remove leftover files."""
     if temp_files_registry:
-        print(f"Cleaning up {len(temp_files_registry)} temporary files...")
+        print(f"\n[CLEANUP] Removing {len(temp_files_registry)} temporary files...")
         for path in list(temp_files_registry):
             try:
                 if os.path.exists(path):
@@ -36,6 +36,9 @@ def cleanup_on_exit():
             except Exception:
                 pass
         temp_files_registry.clear()
+        print("[CLEANUP] Done.")
+    else:
+        print("\n[CLEANUP] No temporary files to clean.")
 
 # Register the cleanup function
 atexit.register(cleanup_on_exit)
@@ -86,7 +89,7 @@ def inference_wrapper(
         input_path = tmp_file.name
     output_path = input_path.replace(".jpg", "_out.jpg")
 
-    # Register files immediately so they are tracked if the script crashes here
+    # Register files immediately so they are tracked
     temp_files_registry.add(input_path)
     temp_files_registry.add(output_path)
 
@@ -104,9 +107,8 @@ def inference_wrapper(
             segment=segment_mode
         )
 
-        # Process Metrics (Handle both float and tuple returns)
+        # Process Metrics
         inf_time = 0.0
-        
         if isinstance(metrics, (float, int)):
             inf_time = float(metrics)
         elif isinstance(metrics, tuple) and len(metrics) >= 1:
@@ -134,17 +136,8 @@ def inference_wrapper(
         print(f"Critical error during inference: {e}")
         return image, "Error", "Error"
 
-    finally:
-        # cleanup this specific run's files immediately
-        for path in [input_path, output_path]:
-            if os.path.exists(path):
-                try:
-                    os.remove(path)
-                except OSError:
-                    pass
-            # Remove from global registry since we just deleted them
-            if path in temp_files_registry:
-                temp_files_registry.discard(path)
+    # Removed 'finally' block that deleted files immediately.
+    # Now files persist until cleanup_on_exit() is called.
 
 # --- UI Styling & Layout ---
 
@@ -262,13 +255,12 @@ with gr.Blocks(title="SAM3 TensorRT") as demo:
 if __name__ == "__main__":
     try:
         load_model()
-        print("Launching Professional UI...")
+        print("Launching UI...")
         
         font_awesome_cdn = """
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
         """
         
-        # 1. wrap launch in a try block
         demo.launch(
             allowed_paths=[tempfile.gettempdir()],
             css=custom_css,
@@ -281,6 +273,5 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n[ERROR] Failed to start application: {e}")
     finally:
-        # 2. This block ALWAYS runs, even if you crash or Ctrl+C
+        # Now you will see the files being deleted here
         cleanup_on_exit()
-        print("[INFO] Cleanup complete. Exiting.")
