@@ -4,13 +4,6 @@ import subprocess
 import os
 import onnxruntime as ort
 
-# New imports for CUDA Python test
-try:
-    from cuda import cudart
-    CUDA_PYTHON_AVAILABLE = True
-except ImportError:
-    CUDA_PYTHON_AVAILABLE = False
-
 def display_spec_header(title):
     print(f"\n{('=' * 60)}")
     print(f"{title.center(60)}")
