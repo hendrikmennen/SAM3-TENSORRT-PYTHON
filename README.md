@@ -51,7 +51,7 @@ Install required Python packages:
 ```bash
 pip install torch torchvision --upgrade
 pip install "git+https://github.com/huggingface/transformers"
-pip install onnx onnxscript onnxslim onnxruntime-gpu onnx_graphsurgeon opencv-python matplotlib tokenizers --upgrade
+pip install onnx onnxscript onnxslim onnxruntime-gpu onnx_graphsurgeon opencv-python matplotlib tokenizers tabulate --upgrade
 pip install nvidia-modelopt "numpy>=2.2.6" "protobuf>=4.25.1" nvidia-ml-py gradio --upgrade
 pip uninstall opencv-python opencv-contrib-python opencv-python-headless -y
 pip install opencv-python
