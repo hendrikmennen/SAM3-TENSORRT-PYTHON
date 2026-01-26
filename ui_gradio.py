@@ -3,8 +3,10 @@ import cv2
 import gradio as gr
 import tempfile
 import numpy as np
+import subprocess
+import atexit  # Added for exit cleanup
 from pathlib import Path
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Union
 from gradio.themes.utils.fonts import GoogleFont
 
 # Import the class from your existing file
@@ -16,17 +18,49 @@ except ImportError:
 
 # --- Configuration ---
 MODEL_DIR = Path("Engines")
-DEFAULT_OUTPUT = ("0.00 ms", "0.00 GB")
+DEFAULT_OUTPUT = ("0.00 ms", "0.00 GB (Total)")
 
-# --- Global Model State ---
+# --- Global State ---
 sam3_engine: Optional[Sam3Inference] = None
+temp_files_registry = set()  # Tracks files for cleanup on exit
+
+# --- Cleanup Handler ---
+def cleanup_on_exit():
+    """Called automatically when the script terminates to remove leftover files."""
+    if temp_files_registry:
+        print(f"Cleaning up {len(temp_files_registry)} temporary files...")
+        for path in list(temp_files_registry):
+            try:
+                if os.path.exists(path):
+                    os.remove(path)
+            except Exception:
+                pass
+        temp_files_registry.clear()
+
+# Register the cleanup function
+atexit.register(cleanup_on_exit)
+
+def get_total_vram() -> float:
+    """Queries nvidia-smi to get the total memory used by the GPU (in GB)."""
+    try:
+        result = subprocess.check_output(
+            ["nvidia-smi", "--query-gpu=memory.used", "--format=csv,nounits,noheader"],
+            encoding="utf-8"
+        )
+        mem_used_mib = float(result.strip().split('\n')[0])
+        return mem_used_mib / 1024.0
+    except Exception as e:
+        print(f"Warning: Could not query VRAM: {e}")
+        return 0.0
 
 def load_model():
     """Initializes the TensorRT engine into global memory."""
     global sam3_engine
     if sam3_engine is None:
         if not MODEL_DIR.exists():
-            raise FileNotFoundError(f"Model directory '{MODEL_DIR}' not found.")
+            print(f"Error: Model directory '{MODEL_DIR}' not found.")
+            return
+        
         print(f"Loading SAM3 TensorRT Engine from {MODEL_DIR}...")
         try:
             sam3_engine = Sam3Inference(str(MODEL_DIR))
@@ -52,6 +86,10 @@ def inference_wrapper(
         input_path = tmp_file.name
     output_path = input_path.replace(".jpg", "_out.jpg")
 
+    # Register files immediately so they are tracked if the script crashes here
+    temp_files_registry.add(input_path)
+    temp_files_registry.add(output_path)
+
     try:
         # Save Input
         img_bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
@@ -66,14 +104,19 @@ def inference_wrapper(
             segment=segment_mode
         )
 
-        # Process Metrics
-        if metrics:
-            inf_time, gpu_mem = metrics
-            time_str = f"{inf_time:.2f} ms"
-            mem_str = f"{gpu_mem:.3f} GB"
-        else:
-            time_str = "N/A"
-            mem_str = "N/A"
+        # Process Metrics (Handle both float and tuple returns)
+        inf_time = 0.0
+        
+        if isinstance(metrics, (float, int)):
+            inf_time = float(metrics)
+        elif isinstance(metrics, tuple) and len(metrics) >= 1:
+            inf_time = float(metrics[0])
+        
+        # Fetch Global VRAM independently
+        total_vram = get_total_vram()
+        
+        time_str = f"{inf_time:.2f} ms"
+        mem_str = f"{total_vram:.2f} GB (Total)"
 
         # Load Result
         if os.path.exists(output_path):
@@ -88,20 +131,23 @@ def inference_wrapper(
         return result_rgb, time_str, mem_str
 
     except Exception as e:
-        print(f"Critical error: {e}")
+        print(f"Critical error during inference: {e}")
         return image, "Error", "Error"
 
     finally:
+        # cleanup this specific run's files immediately
         for path in [input_path, output_path]:
-            if os.path.exists(path) and os.path.isfile(path):
+            if os.path.exists(path):
                 try:
                     os.remove(path)
                 except OSError:
                     pass
+            # Remove from global registry since we just deleted them
+            if path in temp_files_registry:
+                temp_files_registry.discard(path)
 
 # --- UI Styling & Layout ---
 
-# 1. Custom CSS for title, alignment, and icon spacing
 custom_css = """
 .container { max-width: 1200px; margin: auto; }
 .header-text { 
@@ -120,10 +166,9 @@ custom_css = """
     margin-bottom: 30px;
     font-weight: 400;
 }
-.fa { margin-right: 8px; } /* Spacing for icons */
+.fa { margin-right: 8px; }
 """
 
-# 2. Define a Professional Theme (Slate + Blue)
 theme = gr.themes.Soft(
     primary_hue="blue",
     neutral_hue="slate",
@@ -140,7 +185,6 @@ theme = gr.themes.Soft(
 with gr.Blocks(title="SAM3 TensorRT") as demo:
     
     with gr.Column(elem_classes=["container"]):
-        # Header with Font Awesome Icons
         gr.HTML(
             """
             <div style="text-align:center;">
@@ -158,7 +202,6 @@ with gr.Blocks(title="SAM3 TensorRT") as demo:
             
             # --- Left Column: Control Panel ---
             with gr.Column(scale=4, variant="panel"):
-                # Using HTML for section headers to include icons
                 gr.HTML("<h3><i class='fa-solid fa-sliders'></i> Configuration</h3>")
                 
                 input_image = gr.Image(
@@ -172,19 +215,15 @@ with gr.Blocks(title="SAM3 TensorRT") as demo:
                 text_prompt = gr.Textbox(
                     label="Text Prompt", 
                     placeholder="e.g. cat, car, person", 
-                    info="Describe the object to detect",
                     lines=1
                 )
 
-                # Accordion for advanced settings
                 with gr.Accordion("Advanced Parameters", open=False):
                     conf_slider = gr.Slider(
                         minimum=0.0, maximum=1.0, value=0.4, step=0.05, 
                         label="Confidence Threshold"
                     )
-                    segment_check = gr.Checkbox(
-                        label="Generate Mask", value=True
-                    )
+                    segment_check = gr.Checkbox(label="Generate Mask", value=True)
 
                 run_btn = gr.Button("Run Inference", variant="primary", size="lg")
 
@@ -204,12 +243,11 @@ with gr.Blocks(title="SAM3 TensorRT") as demo:
                         label="Processing Time", 
                         value="0.00 ms", 
                         interactive=False,
-                        scale=1,
-                        elem_id="time-box"
+                        scale=1
                     )
                     mem_output = gr.Textbox(
-                        label="GPU VRAM", 
-                        value="0.00 GB", 
+                        label="Total GPU Usage", 
+                        value="0.00 GB (Total)", 
                         interactive=False,
                         scale=1
                     )
@@ -221,23 +259,28 @@ with gr.Blocks(title="SAM3 TensorRT") as demo:
         outputs=[output_image, time_output, mem_output]
     )
 
-# --- Launch with Font Awesome CDN ---
 if __name__ == "__main__":
     try:
         load_model()
         print("Launching Professional UI...")
         
-        # We inject the Font Awesome CDN into the <head> of the page
         font_awesome_cdn = """
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
         """
         
+        # 1. wrap launch in a try block
         demo.launch(
             allowed_paths=[tempfile.gettempdir()],
             css=custom_css,
             theme=theme,
-            head=font_awesome_cdn  # This loads the icons
+            head=font_awesome_cdn
         )
         
+    except KeyboardInterrupt:
+        print("\n[INFO] User stopped the application.")
     except Exception as e:
-        print(f"Failed to start application: {e}")
+        print(f"\n[ERROR] Failed to start application: {e}")
+    finally:
+        # 2. This block ALWAYS runs, even if you crash or Ctrl+C
+        cleanup_on_exit()
+        print("[INFO] Cleanup complete. Exiting.")

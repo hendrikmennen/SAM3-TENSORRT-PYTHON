@@ -1,11 +1,9 @@
-import os
 import cv2
 import time
 import argparse
 import numpy as np
 import torch
 import tensorrt as trt
-import pynvml  
 from pathlib import Path
 from typing import Dict, Tuple
 from tokenizers import Tokenizer
@@ -36,7 +34,7 @@ class TRTModule:
             self.io_info[name] = {
                 "mode": self.engine.get_tensor_mode(name),
                 "dtype": self.engine.get_tensor_dtype(name),
-                "shape": self.engine.get_tensor_shape(name) # Store shape here
+                "shape": self.engine.get_tensor_shape(name) 
             }
 
     def _trt_dtype_to_torch(self, trt_dtype):
@@ -45,7 +43,6 @@ class TRTModule:
         return mapping.get(trt_dtype, torch.float32)
 
     def get_tensor_shape(self, name: str) -> Tuple:
-        """Helper to retrieve the shape of a specific tensor by name."""
         if name in self.io_info:
             return tuple(self.io_info[name]["shape"])
         raise KeyError(f"Tensor '{name}' not found in engine.")
@@ -61,7 +58,6 @@ class TRTModule:
 
         for name, info in self.io_info.items():
             if info["mode"] == trt.TensorIOMode.OUTPUT:
-                # Retrieve dynamic output shape
                 shape = tuple(self.context.get_tensor_shape(name))
                 dtype = self._trt_dtype_to_torch(info["dtype"])
                 out_tensor = torch.empty(shape, dtype=dtype, device='cuda')
@@ -88,21 +84,14 @@ class Sam3Inference:
 
         # --- AUTO-DETECT RESOLUTION ---
         try:
-            # We look for the 'images' input tensor in the vision encoder
-            # Shape is typically (Batch, Channels, Height, Width) -> e.g., (1, 3, 1024, 1024)
             input_shape = self.vision_encoder.get_tensor_shape("images")
-            
-            # Assuming NCHW format (standard for PyTorch/TRT vision models)
             if len(input_shape) == 4:
                 self.target_h = input_shape[2]
                 self.target_w = input_shape[3]
             else:
-                # Fallback if shape is weird
                 print(f"[WARN] Unexpected input shape {input_shape}. Defaulting to 1024.")
                 self.target_h = self.target_w = 1024
-
             print(f"[INFO] Auto-detected input resolution: {self.target_w}x{self.target_h}")
-            
         except KeyError:
             print("[WARN] Could not find tensor 'images' to determine resolution. Defaulting to 1024.")
             self.target_h = self.target_w = 1024
@@ -124,26 +113,6 @@ class Sam3Inference:
             raise FileNotFoundError(f"Could not find engine for {name} in {self.model_dir}")
         return target
 
-    def _get_gpu_memory_pynvml(self):
-        try:
-            pynvml.nvmlInit()
-            handle = pynvml.nvmlDeviceGetHandleByIndex(0) 
-            procs = pynvml.nvmlDeviceGetComputeRunningProcesses(handle)
-            graphics_procs = pynvml.nvmlDeviceGetGraphicsRunningProcesses(handle)
-            procs.extend(graphics_procs)
-            
-            my_pid = os.getpid()
-            for p in procs:
-                if p.pid == my_pid:
-                    if p.usedGpuMemory is None: continue
-                    mem_mb = p.usedGpuMemory / (1024 ** 2)
-                    pynvml.nvmlShutdown()
-                    return mem_mb
-            pynvml.nvmlShutdown()
-        except Exception:
-            pass
-        return torch.cuda.max_memory_reserved() / (1024 ** 2)
-
     def run(self, img_path, prompt, conf, out_path, segment=False):
         # 1. Preprocess
         orig = cv2.imread(img_path)
@@ -152,7 +121,6 @@ class Sam3Inference:
         h, w = orig.shape[:2]
         rgb = cv2.cvtColor(orig, cv2.COLOR_BGR2RGB)
         
-        # USE DYNAMIC SIZE HERE
         pil_img = PILImage.fromarray(rgb).resize((self.target_w, self.target_h), PILImage.BILINEAR)
         pixel_values = (np.array(pil_img).astype(np.float32) / 127.5 - 1.0).transpose(2,0,1)[None]
 
@@ -193,7 +161,6 @@ class Sam3Inference:
         torch.cuda.synchronize()
         t1 = time.time()
         
-        exact_mem_mb = self._get_gpu_memory_pynvml()
         inference_time = (t1 - t0) * 1000
 
         # 4. Visualization
@@ -223,15 +190,14 @@ class Sam3Inference:
         cv2.imwrite(out_path, orig)
         
         print("-" * 50)
-        print(f"| Metric                | Value            |")
-        print(f"|-----------------------|------------------|")
-        print(f"| Input Res             | {self.target_w}x{self.target_h}          |")
-        print(f"| Inference Time        | {inference_time:.2f} ms        |")
-        print(f"| GPU Memory (Process)  | {exact_mem_mb / 1024:.2f} GB          |")
+        print(f"| Metric                 | Value            |")
+        print(f"|------------------------|------------------|")
+        print(f"| Input Res              | {self.target_w}x{self.target_h}      |")
+        print(f"| Inference Time         | {inference_time:.2f} ms     |")
         print("-" * 50)
         print(f"[SUCCESS] Saved to {out_path}")
 
-        return inference_time, exact_mem_mb / 1024
+        return inference_time
 
     def _draw_label(self, img, text, x, y, color):
         font = cv2.FONT_HERSHEY_SIMPLEX
