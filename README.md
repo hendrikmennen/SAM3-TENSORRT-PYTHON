@@ -8,6 +8,8 @@ This project provides a complete pipeline to run **SAM3** (Segment Anything Mode
 - **High‑performance inference** with text prompts (`SAM3_TensorRT_Inference.py`)
 - **Interactive web UI** for easy testing (`ui_gradio.py`)
 
+## COLAB DEMO LINK : https://colab.research.google.com/drive/11OOBzDtrKQnq8jDSYP-u9jwO4YhPPdT8?usp=sharing
+
 The workflow is designed around FP16 TensorRT engines with dynamic shapes and explicit batch, supporting both **bounding box detection** and **mask segmentation** modes.
 
 ![SAM3 UI](SAM3_UI.png)
