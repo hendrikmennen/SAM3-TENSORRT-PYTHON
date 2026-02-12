@@ -361,9 +361,6 @@ Just replace `640` in the docker command with your desired resolution:
 ```bash
 ./open_UI.sh --size YOUR_RESOLUTION
 ```
-
-⚠️ Make sure your TensorRT engines were built using the same resolution.
-
 ---
 
 After running, open:
