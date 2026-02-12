@@ -342,7 +342,29 @@ docker run --gpus all \
 - Maps selected port for Gradio UI
 - Mounts current directory as `/workspace`
 - Pulls latest code from GitHub on every container start
-- Launches the SAM3 Gradio UI at resolution `640`
+- Launches the SAM3 Gradio UI
+
+---
+
+## 📏 Changing Resolution
+
+You can change the inference resolution by modifying the `--size` parameter:
+
+Example:
+
+```bash
+./open_UI.sh --size 1008
+```
+
+Just replace `640` in the docker command with your desired resolution:
+
+```bash
+./open_UI.sh --size YOUR_RESOLUTION
+```
+
+⚠️ Make sure your TensorRT engines were built using the same resolution.
+
+---
 
 After running, open:
 
