@@ -289,6 +289,68 @@ Output:
 
 ---
 
+## 🐳 Docker Image Usage
+
+You can run the complete SAM3 TensorRT pipeline using the prebuilt Docker image.
+
+### 📦 Important
+
+The container will mount your **current directory** as `/workspace`.
+
+So before starting the container, make sure you have downloaded the original **SAM3 model** from Hugging Face into your current directory:
+
+### Download SAM3
+
+```bash
+hf download facebook/sam3 --local-dir sam3
+```
+
+This will create a `sam3` folder in your current working directory.
+
+---
+
+### 🚀 Run Docker Container
+
+Set the port (default: 7860):
+
+```bash
+export PORT=7860
+```
+
+Then run:
+
+```bash
+docker run --gpus all \
+  --ipc=host \
+  -p $PORT:$PORT \
+  -e GRADIO_SERVER_PORT=$PORT \
+  -v $(pwd):/workspace \
+  -it \
+  kishanstark2003/sam3_demo_gradio:latest \
+  /bin/bash -c "export PATH=\$PATH:/usr/src/tensorrt/bin && ./open_UI.sh --size 640"
+```
+
+---
+
+### 🔎 What This Does
+
+- Enables GPU support (`--gpus all`)
+- Shares host IPC namespace (`--ipc=host`)
+- Maps selected port to access Gradio UI
+- Mounts current directory as `/workspace`
+- Adds TensorRT binaries to PATH inside container
+- Launches the SAM3 Gradio UI at resolution `640`
+
+After running the command, open your browser and go to:
+
+```
+http://localhost:7860
+```
+
+You should see the SAM3 Gradio interface running with TensorRT acceleration.
+
+---
+
 ## 6. Files Overview
 
 - `SAM3_PyTorch_To_Onnx.py`  
