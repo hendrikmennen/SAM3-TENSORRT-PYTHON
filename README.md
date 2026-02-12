@@ -289,15 +289,15 @@ Output:
 
 ---
 
-## 🐳 Docker Image Usage
+## 🐳 Docker Image Usage (Always Pull Latest Code)
 
-You can run the complete SAM3 TensorRT pipeline using the prebuilt Docker image.
+You can run the SAM3 TensorRT pipeline using the prebuilt Docker image while always pulling the latest code from GitHub.
 
 ### 📦 Important
 
-The container will mount your **current directory** as `/workspace`.
+The container mounts your **current directory** as `/workspace`.
 
-So before starting the container, make sure you have downloaded the original **SAM3 model** from Hugging Face into your current directory:
+Before starting, make sure you have downloaded the original SAM3 model from Hugging Face into your current directory:
 
 ### Download SAM3
 
@@ -305,11 +305,9 @@ So before starting the container, make sure you have downloaded the original **S
 hf download facebook/sam3 --local-dir sam3
 ```
 
-This will create a `sam3` folder in your current working directory.
-
 ---
 
-### 🚀 Run Docker Container
+## 🚀 Run Docker Container (Auto-Update Repo)
 
 Set the port (default: 7860):
 
@@ -327,27 +325,32 @@ docker run --gpus all \
   -v $(pwd):/workspace \
   -it \
   kishanstark2003/sam3_demo_gradio:latest \
-  /bin/bash -c "export PATH=\$PATH:/usr/src/tensorrt/bin && ./open_UI.sh --size 640"
+  /bin/bash -c "\
+    export PATH=\$PATH:/usr/src/tensorrt/bin && \
+    cd /SAM3-TENSORRT-PYTHON && \
+    git pull && \
+    cd .. && \
+    ./open_UI.sh --size 640"
 ```
 
 ---
 
-### 🔎 What This Does
+## 🔎 What This Does
 
 - Enables GPU support (`--gpus all`)
 - Shares host IPC namespace (`--ipc=host`)
-- Maps selected port to access Gradio UI
+- Maps selected port for Gradio UI
 - Mounts current directory as `/workspace`
-- Adds TensorRT binaries to PATH inside container
+- Pulls latest code from GitHub on every container start
 - Launches the SAM3 Gradio UI at resolution `640`
 
-After running the command, open your browser and go to:
+After running, open:
 
 ```
 http://localhost:7860
 ```
 
-You should see the SAM3 Gradio interface running with TensorRT acceleration.
+You should see the SAM3 Gradio interface running with the latest repository code.
 
 ---
 
