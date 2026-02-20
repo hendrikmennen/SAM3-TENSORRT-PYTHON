@@ -1,3 +1,7 @@
+# SAM3-TENSORRT-PYTHON — SAM3 inference pipeline with TensorRT (FP16)
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![GitHub stars](https://img.shields.io/github/stars/Kishan200308/SAM3-TENSORRT-PYTHON?style=social)](https://github.com/Kishan200308/SAM3-TENSORRT-PYTHON/stargazers) [![Release](https://img.shields.io/github/v/release/Kishan200308/SAM3-TENSORRT-PYTHON)](https://github.com/Kishan200308/SAM3-TENSORRT-PYTHON/releases)
+
 ## SAM3 TensorRT Pipeline
 
 Current: 2026-02-20 — Repository status: actively maintained. Keywords: Current, SAM3, TensorRT, FP16, TensorRT-Python, Gradio, ONNX, NVIDIA
@@ -177,7 +181,6 @@ python3 Build_Engines.py --onnx "Onnx-Models" --engine "Engines"
 ```
 
 The engine building command remains the same regardless of resolution.
-
 ---
 ## 3. Build TensorRT Engines
 
@@ -201,7 +204,6 @@ The script:
   - `geometry-encoder`
   - `decoder`
 - Skips engines that already exist.
-
 ---
 ## 4. Verify System & TensorRT Installation
 
@@ -221,7 +223,6 @@ It reports:
 - Available **ONNX Runtime providers** (CUDA / TensorRT, etc.)
 
 Run this once after setup to confirm everything is wired correctly.
-
 ---
 ## 5. Run TensorRT Inference
 
@@ -284,7 +285,6 @@ What the script does:
 Output:
 
 - An image with bounding boxes/masks and scores, saved to `--output`.
-
 ---
 ## 🐳 Docker Image Usage (Always Pull Latest Code)
 
@@ -301,7 +301,6 @@ Before starting, make sure you have downloaded the original SAM3 model from Hugg
 ```bash
 hf download facebook/sam3 --local-dir sam3
 ```
-
 ---
 ## 🚀 Run Docker Container (Auto-Update Repo)
 
