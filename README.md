@@ -1,5 +1,7 @@
 ## SAM3 TensorRT Pipeline
 
+Current: 2026-02-20 — Repository status: actively maintained. Keywords: Current, SAM3, TensorRT, FP16, TensorRT-Python, Gradio, ONNX, NVIDIA
+
 This project provides a complete pipeline to run **SAM3** (Segment Anything Model 3) with **TensorRT**:
 
 - **System audit** for CUDA / TensorRT readiness (`Check.py`)
@@ -108,7 +110,6 @@ source ~/.bashrc
 python3 Check.py
 ```
 ---
-
 ## 2. Download or Export ONNX Models
 
 You have two options: **download pre‑exported ONNX** or **export from PyTorch yourself**.
@@ -178,7 +179,6 @@ python3 Build_Engines.py --onnx "Onnx-Models" --engine "Engines"
 The engine building command remains the same regardless of resolution.
 
 ---
-
 ## 3. Build TensorRT Engines
 
 Once you have the ONNX models in `Onnx-Models`, build TensorRT engines using `Build_Engines.py`.
@@ -203,7 +203,6 @@ The script:
 - Skips engines that already exist.
 
 ---
-
 ## 4. Verify System & TensorRT Installation
 
 Use `Check.py` to audit your environment:
@@ -224,7 +223,6 @@ It reports:
 Run this once after setup to confirm everything is wired correctly.
 
 ---
-
 ## 5. Run TensorRT Inference
 
 With engines and tokenizer in place, you can run inference in two ways: **command line** or **interactive web UI**.
@@ -246,8 +244,8 @@ python3 SAM3_TensorRT_Inference.py --input "Assets/Test.jpg" --prompt "person" -
 Arguments:
 
 - `--input`: path to input image file.
-- `--prompt`: text prompt (e.g., `"person"`, `"car"`, `"dog"`).
-- `--conf`: confidence threshold \(0.0–1.0\) applied on box scores.
+- `--prompt`: text prompt (e.g., "person", "car", "dog").
+- `--conf`: confidence threshold (0.0–1.0) applied on box scores.
 - `--output`: path to save the annotated image.
 - `--models`: directory containing `.engine` files and `tokenizer.json` (typically `Engines`).
 - `--segment`: (optional) enable mask segmentation mode. If omitted, uses bounding box detection.
@@ -274,7 +272,7 @@ What the script does:
 - Wraps each engine with `TRTModule` for efficient execution using PyTorch CUDA tensors.
 - Preprocesses the input image:
   - Resize to `1008 × 1008`
-  - Normalize to \([-1, 1]\)
+  - Normalize to [-1, 1]
 - Runs:
   - Vision encoder → FPN features + positional encodings
   - Text encoder → token embeddings + masks (via `tokenizers` and `tokenizer.json`)
@@ -288,7 +286,6 @@ Output:
 - An image with bounding boxes/masks and scores, saved to `--output`.
 
 ---
-
 ## 🐳 Docker Image Usage (Always Pull Latest Code)
 
 You can run the SAM3 TensorRT pipeline using the prebuilt Docker image while always pulling the latest code from GitHub.
@@ -306,7 +303,6 @@ hf download facebook/sam3 --local-dir sam3
 ```
 
 ---
-
 ## 🚀 Run Docker Container (Auto-Update Repo)
 
 Set the port (default: 7860):
@@ -326,109 +322,4 @@ docker run --gpus all \
   -it \
   kishanstark2003/sam3_demo_gradio:latest \
   /bin/bash -c "\
-    export PATH=\$PATH:/usr/src/tensorrt/bin && \
-    cd /SAM3-TENSORRT-PYTHON && \
-    git pull && \
-    cd .. && \
-    ./open_UI.sh --size 640"
-```
-
----
-
-## 🔎 What This Does
-
-- Enables GPU support (`--gpus all`)
-- Shares host IPC namespace (`--ipc=host`)
-- Maps selected port for Gradio UI
-- Mounts current directory as `/workspace`
-- Pulls latest code from GitHub on every container start
-- Launches the SAM3 Gradio UI
-
----
-
-## 📏 Changing Resolution
-
-You can change the inference resolution by modifying the `--size` parameter:
-
-Example:
-
-```bash
-./open_UI.sh --size 1008
-```
-
-Just replace `640` in the docker command with your desired resolution:
-
-```bash
-./open_UI.sh --size YOUR_RESOLUTION
-```
----
-
-After running, open:
-
-```
-http://localhost:7860
-```
-
-You should see the SAM3 Gradio interface running with the latest repository code.
-
----
-
-## 6. Files Overview
-
-- `SAM3_PyTorch_To_Onnx.py`  
-  TensorRT‑friendly ONNX exporter for SAM3:
-  - Custom wrappers (`VisionEncoderWrapper`, `TextEncoderWrapper`, `GeometryEncoderWrapper`, `DecoderWrapper`)
-  - Proper dynamic axes and shapes for TensorRT.
-
-- `Build_Engines.py`  
-  Converts ONNX models into TensorRT `.engine` files using `trtexec` with FP16 and explicit shapes.
-
-- `SAM3_TensorRT_Inference.py`  
-  Runs **standalone TensorRT inference** with text prompts and saves visualized detections. Supports both bounding box and mask segmentation modes.
-
-- `ui_gradio.py`  
-  **Interactive web interface** built with Gradio for easy testing and experimentation. Provides real-time inference with adjustable parameters.
-
-- `Check.py`  
-  System diagnostic script for GPU, CUDA, TensorRT, and ONNX Runtime.
-
-- `Requirements_Install_Commands.txt`  
-  Complete installation commands for Python packages and TensorRT stack (primarily Linux).
-
-- `Instructions.txt`  
-  Quick reference guide for system check, downloading/exporting ONNX, building engines, and running inference commands.
-
-- `Assets/Test.jpg`  
-  Example input image for testing the pipeline.
-
----
-
-## 7. Troubleshooting
-
-**Common Issues:**
-
-- **"CUDA out of memory"**: Reduce batch size or use smaller input images
-- **"TensorRT engine not found"**: Ensure you've run `Build_Engines.py` and copied `tokenizer.json`
-- **"trtexec not found"**: Add TensorRT bin directory to your PATH
-- **Import errors**: Run `python3 Check.py` to verify your environment setup
-- **Slow inference**: Ensure you're using GPU-enabled ONNX Runtime and TensorRT engines
-
----
-
-## 8. Credits
-
-This work is adapted from and inspired by:
-
-- **Original SAM3 implementation**: [facebook/sam3](https://github.com/facebookresearch/sam3)
-- **TensorRT optimization techniques**: [jamjamjon/usls SAM3 scripts](https://github.com/jamjamjon/usls/tree/main/scripts/sam3-image)
-
-Special thanks to the contributors of these projects for their foundational work in making SAM3 accessible and optimized for deployment.
-
----
-
-## Additional Resources
-
-- Full installation commands: See `Requirements_Install_Commands.txt`
-- Quick command reference: See `Instructions.txt`
-- System verification: Run `python3 Check.py`
-
+    export PATH=\
