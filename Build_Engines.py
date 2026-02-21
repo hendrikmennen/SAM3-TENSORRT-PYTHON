@@ -6,6 +6,7 @@ import shutil
 import onnx  # Required to inspect the model
 
 PATCH_SIZE_DIVISOR = 14  # ViT patch size
+TOKENIZER_ASSETS = ("vocab.json", "merges.txt", "special_tokens_map.json")
 
 def get_onnx_resolution(onnx_path):
     """
@@ -111,11 +112,12 @@ def build_engines(onnx_dir, engine_dir, size):
 
     os.makedirs(engine_dir, exist_ok=True)
 
-    # Copy tokenizer if present
-    tokenizer_src = os.path.join(onnx_dir, "tokenizer.json")
-    tokenizer_dst = os.path.join(engine_dir, "tokenizer.json")
-    if os.path.exists(tokenizer_src) and not os.path.exists(tokenizer_dst):
-        shutil.copy2(tokenizer_src, tokenizer_dst)
+    # Copy tokenizer assets if present
+    for asset_name in TOKENIZER_ASSETS:
+        src = os.path.join(onnx_dir, asset_name)
+        dst = os.path.join(engine_dir, asset_name)
+        if os.path.exists(src) and not os.path.exists(dst):
+            shutil.copy2(src, dst)
 
     for name, cfg in models.items():
         engine_path = os.path.join(engine_dir, f"{name}.engine")

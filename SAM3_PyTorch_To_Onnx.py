@@ -4,6 +4,7 @@ SAM3 ONNX Export Script (Dynamic Batch + TensorRT Compatible)
 
 import argparse
 import math
+import shutil
 from pathlib import Path
 
 import torch
@@ -12,6 +13,9 @@ import torchvision
 
 from transformers.masking_utils import create_bidirectional_mask
 from transformers.models.sam3.modeling_sam3 import Sam3Model
+
+
+TOKENIZER_ASSETS = ("vocab.json", "merges.txt", "special_tokens_map.json")
 
 
 # TensorRT-compatible Position Encoding
@@ -105,7 +109,7 @@ class VisionEncoderWrapper(nn.Module):
         pos_enc_2 = compute_sine_position_encoding(
             shape=(1, 256, feat, feat),
             device=device,
-            dtype=torch.float32,
+            dtype=orig_pos_embed.dtype,
             num_pos_feats=num_pos_feats,
         )
         self.register_buffer("pos_enc_2", pos_enc_2)
@@ -357,11 +361,12 @@ def export_vision_encoder(model: Sam3Model, output_dir: Path, device: str = "cud
     print(f"Exporting Vision Encoder (Input: {image_size}x{image_size})...")
     # Pass image_size to wrapper
     wrapper = VisionEncoderWrapper(model, device=device, image_size=image_size).to(device).eval()
+    model_dtype = next(wrapper.parameters()).dtype
 
     torch.onnx.export(
         wrapper,
         # Use image_size for input tensor
-        (torch.randn(1, 3, image_size, image_size, device=device),),
+        (torch.randn(1, 3, image_size, image_size, dtype=model_dtype, device=device),),
         str(output_dir / "vision-encoder.onnx"),
         input_names=["images"],
         output_names=["fpn_feat_0", "fpn_feat_1", "fpn_feat_2", "fpn_pos_2"],
@@ -409,6 +414,7 @@ def export_text_encoder(model: Sam3Model, output_dir: Path, device: str = "cuda"
 def export_geometry_encoder(model: Sam3Model, output_dir: Path, device: str = "cuda", image_size: int = 1008):
     print("Exporting Geometry Encoder...")
     wrapper = GeometryEncoderWrapper(model).to(device).eval()
+    model_dtype = next(wrapper.parameters()).dtype
 
     # Calculate feature size for dummy inputs
     feat = image_size // 14
@@ -416,10 +422,10 @@ def export_geometry_encoder(model: Sam3Model, output_dir: Path, device: str = "c
     torch.onnx.export(
         wrapper,
         (
-            torch.rand(1, 5, 4, device=device),
+            torch.rand(1, 5, 4, dtype=model_dtype, device=device),
             torch.ones(1, 5, dtype=torch.long, device=device),
-            torch.randn(1, 256, feat, feat, device=device),
-            torch.randn(1, 256, feat, feat, device=device),
+            torch.randn(1, 256, feat, feat, dtype=model_dtype, device=device),
+            torch.randn(1, 256, feat, feat, dtype=model_dtype, device=device),
         ),
         str(output_dir / "geometry-encoder.onnx"),
         input_names=["input_boxes", "input_boxes_labels", "fpn_feat_2", "fpn_pos_2"],
@@ -442,6 +448,7 @@ def export_geometry_encoder(model: Sam3Model, output_dir: Path, device: str = "c
 def export_decoder(model: Sam3Model, output_dir: Path, device: str = "cuda", image_size: int = 1008):
     print("Exporting Decoder...")
     wrapper = DecoderWrapper(model).to(device).eval()
+    model_dtype = next(wrapper.parameters()).dtype
 
     # Calculate dynamic pyramid sizes
     feat2 = image_size // 14
@@ -451,11 +458,11 @@ def export_decoder(model: Sam3Model, output_dir: Path, device: str = "cuda", ima
     torch.onnx.export(
         wrapper,
         (
-            torch.randn(1, 256, feat0, feat0, device=device),
-            torch.randn(1, 256, feat1, feat1, device=device),
-            torch.randn(1, 256, feat2, feat2, device=device),
-            torch.randn(1, 256, feat2, feat2, device=device),
-            torch.rand(1, 32, 256, device=device), # Prompt features usually 256 dim
+            torch.randn(1, 256, feat0, feat0, dtype=model_dtype, device=device),
+            torch.randn(1, 256, feat1, feat1, dtype=model_dtype, device=device),
+            torch.randn(1, 256, feat2, feat2, dtype=model_dtype, device=device),
+            torch.randn(1, 256, feat2, feat2, dtype=model_dtype, device=device),
+            torch.rand(1, 32, 256, dtype=model_dtype, device=device), # Prompt features usually 256 dim
             torch.ones(1, 32, dtype=torch.bool, device=device),
         ),
         str(output_dir / "decoder.onnx"),
@@ -506,6 +513,31 @@ def main():
         help="Input image size (must be divisible by patch size, e.g. 1008, 768, 644)",
     )
     parser.add_argument("--device", type=str, default="cpu")
+    parser.add_argument(
+        "--fp16",
+        action="store_true",
+        help="Enable FP16 export mode. For ONNX Runtime safety, only vision is FP16 by default.",
+    )
+    parser.add_argument(
+        "--fp16-vision",
+        action="store_true",
+        help="Export vision-encoder in FP16.",
+    )
+    parser.add_argument(
+        "--fp16-text",
+        action="store_true",
+        help="Export text-encoder in FP16 (may fail on ONNX Runtime due to mixed-dtype LayerNorm).",
+    )
+    parser.add_argument(
+        "--fp16-geometry",
+        action="store_true",
+        help="Export geometry-encoder in FP16 (may fail on ONNX Runtime due to mixed-dtype LayerNorm).",
+    )
+    parser.add_argument(
+        "--fp16-decoder",
+        action="store_true",
+        help="Export decoder in FP16.",
+    )
     args = parser.parse_args()
 
     if not args.module and not args.all:
@@ -516,18 +548,55 @@ def main():
 
     print(f"Loading SAM3 from {args.model_path}...")
     model = Sam3Model.from_pretrained(args.model_path).to(args.device).eval()
+    fp16_enabled = False
+    fp16_modules = set()
+    if args.fp16 and args.device.startswith("cuda"):
+        fp16_enabled = True
+        # Safe default for ONNX Runtime/C#: vision only.
+        fp16_modules = {"vision"}
+
+        # Optional per-module overrides.
+        if args.fp16_vision:
+            fp16_modules.add("vision")
+        if args.fp16_text:
+            fp16_modules.add("text")
+        if args.fp16_geometry:
+            fp16_modules.add("geometry")
+        if args.fp16_decoder:
+            fp16_modules.add("decoder")
+
+        print(f"  ✓ FP16 export enabled for modules: {', '.join(sorted(fp16_modules))}")
+        if "text" not in fp16_modules:
+            print("  ! text-encoder will be exported in FP32 (safer for ONNX Runtime/C#)")
+        if "geometry" not in fp16_modules:
+            print("  ! geometry-encoder will be exported in FP32 (safer for ONNX Runtime/C#)")
+    elif args.fp16:
+        print("  ! --fp16 was set but device is not CUDA; continuing with default dtype.")
     print("  ✓ Model loaded\n")
 
     modules = ["vision", "text", "geometry", "decoder"] if args.all else [args.module]
 
     with torch.no_grad():
         for m in modules:
+            if fp16_enabled:
+                use_fp16_for_module = m in fp16_modules
+                model = model.half() if use_fp16_for_module else model.float()
             {
                 "vision": export_vision_encoder,
                 "text": export_text_encoder,
                 "geometry": export_geometry_encoder,
                 "decoder": export_decoder,
             }[m](model, output_dir, args.device, args.size)
+
+    model_path = Path(args.model_path)
+    for asset_name in TOKENIZER_ASSETS:
+        src = model_path / asset_name
+        dst = output_dir / asset_name
+        if src.exists():
+            shutil.copy2(src, dst)
+            print(f"  ✓ Copied tokenizer asset: {asset_name}")
+        else:
+            print(f"  ! Missing tokenizer asset in model path: {asset_name}")
 
     print(f"\n✓ Export complete! Models saved to: {output_dir}")
 

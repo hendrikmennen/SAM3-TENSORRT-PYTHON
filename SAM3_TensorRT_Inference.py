@@ -6,9 +6,9 @@ import torch
 import tensorrt as trt
 from pathlib import Path
 from typing import Dict, Tuple
-from tokenizers import Tokenizer
 from PIL import Image as PILImage
 from tabulate import tabulate  
+from transformers import CLIPTokenizerFast
 
 # --- Constants ---
 PURPLE_COLOR = (255, 71, 151) 
@@ -98,13 +98,16 @@ class Sam3Inference:
             self.target_h = self.target_w = 1024
         # ------------------------------
 
-        tokenizer_path = self.model_dir / "tokenizer.json"
-        if not tokenizer_path.exists():
-            raise FileNotFoundError(f"tokenizer.json missing in {model_dir}")
-            
-        self.tokenizer = Tokenizer.from_file(str(tokenizer_path))
-        self.tokenizer.enable_padding(length=32, pad_id=49407)
-        self.tokenizer.enable_truncation(max_length=32)
+        required_tokenizer_files = ["vocab.json", "merges.txt", "special_tokens_map.json"]
+        missing = [f for f in required_tokenizer_files if not (self.model_dir / f).exists()]
+        if missing:
+            raise FileNotFoundError(
+                f"Missing tokenizer assets in {model_dir}: {', '.join(missing)}"
+            )
+
+        self.tokenizer = CLIPTokenizerFast.from_pretrained(
+            str(self.model_dir), local_files_only=True
+        )
 
     def _find(self, name, suffix):
         p_spec = self.model_dir / f"{name}{suffix}.engine"
@@ -133,10 +136,16 @@ class Sam3Inference:
 
         # 2. Forward Pass
         v_feats = self.vision_encoder(images=pixel_values)
-        tokens = self.tokenizer.encode(prompt)
+        tokens = self.tokenizer(
+            prompt,
+            padding="max_length",
+            truncation=True,
+            max_length=32,
+            return_tensors="np",
+        )
         t_feats = self.text_encoder(
-            input_ids=np.array([tokens.ids], dtype=np.int64), 
-            attention_mask=np.array([tokens.attention_mask], dtype=np.int64)
+            input_ids=tokens["input_ids"].astype(np.int64),
+            attention_mask=tokens["attention_mask"].astype(np.int64),
         )
         
         out = self.decoder(

@@ -132,7 +132,9 @@ This will create an `Onnx-Models` directory containing:
 - `text-encoder.onnx`
 - `geometry-encoder.onnx`
 - `decoder.onnx`
-- `tokenizer.json` (auto copied to the engines directory)
+- `vocab.json`
+- `merges.txt`
+- `special_tokens_map.json`
 
 ### 2.2. Export ONNX from the SAM3 PyTorch model (Manual)
 
@@ -226,7 +228,7 @@ Run this once after setup to confirm everything is wired correctly.
 ---
 ## 5. Run TensorRT Inference
 
-With engines and tokenizer in place, you can run inference in two ways: **command line** or **interactive web UI**.
+With engines and tokenizer assets in place, you can run inference in two ways: **command line** or **interactive web UI**.
 
 ### 5.1. Command Line Inference
 
@@ -248,7 +250,7 @@ Arguments:
 - `--prompt`: text prompt (e.g., "person", "car", "dog").
 - `--conf`: confidence threshold (0.0–1.0) applied on box scores.
 - `--output`: path to save the annotated image.
-- `--models`: directory containing `.engine` files and `tokenizer.json` (typically `Engines`).
+- `--models`: directory containing `.engine` files plus `vocab.json`, `merges.txt`, and `special_tokens_map.json` (typically `Engines`).
 - `--segment`: (optional) enable mask segmentation mode. If omitted, uses bounding box detection.
 
 ### 5.2. Interactive Web UI
@@ -276,7 +278,7 @@ What the script does:
   - Normalize to [-1, 1]
 - Runs:
   - Vision encoder → FPN features + positional encodings
-  - Text encoder → token embeddings + masks (via `tokenizers` and `tokenizer.json`)
+  - Text encoder → token embeddings + masks (via CLIP tokenizer assets: `vocab.json`, `merges.txt`, `special_tokens_map.json`)
   - Decoder → predicted boxes, logits, presence logits, and masks
 - Computes combined scores from logits and presence logits, filters by `--conf`, denormalizes boxes, and draws them onto the original image.
 - **Bounding Box Mode**: Draws rectangular boxes around detected objects
