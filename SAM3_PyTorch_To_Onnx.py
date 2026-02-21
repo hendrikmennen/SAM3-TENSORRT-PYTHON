@@ -365,7 +365,7 @@ def export_vision_encoder(model: Sam3Model, output_dir: Path, device: str = "cud
         str(output_dir / "vision-encoder.onnx"),
         input_names=["images"],
         output_names=["fpn_feat_0", "fpn_feat_1", "fpn_feat_2", "fpn_pos_2"],
-        opset_version=20,
+        opset_version=17,
         do_constant_folding=True,
         dynamo=False,
         dynamic_axes={
