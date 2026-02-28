@@ -10,12 +10,47 @@ from pathlib import Path
 import torch
 import torch.nn as nn
 import torchvision
+try:
+    from onnxruntime.quantization import QuantType, quantize_dynamic
+except Exception:
+    QuantType = None
+    quantize_dynamic = None
 
 from transformers.masking_utils import create_bidirectional_mask
 from transformers.models.sam3.modeling_sam3 import Sam3Model
 
 
 TOKENIZER_ASSETS = ("vocab.json", "merges.txt", "special_tokens_map.json")
+MODULE_TO_ONNX = {
+    "vision": "vision-encoder.onnx",
+    "text": "text-encoder.onnx",
+    "geometry": "geometry-encoder.onnx",
+    "decoder": "decoder.onnx",
+}
+
+
+def quantize_onnx_int8(src_path: Path, dst_path: Path) -> None:
+    if quantize_dynamic is None or QuantType is None:
+        raise RuntimeError(
+            "onnxruntime.quantization is not available. Install onnxruntime/onnxruntime-gpu to use --int8."
+        )
+    inplace = src_path.resolve() == dst_path.resolve()
+    write_path = dst_path
+    if inplace:
+        write_path = dst_path.with_name(f"{dst_path.stem}.int8_tmp{dst_path.suffix}")
+
+    print(f"  [INT8] Quantizing: {src_path.name} -> {dst_path.name}")
+    quantize_dynamic(
+        model_input=str(src_path),
+        model_output=str(write_path),
+        weight_type=QuantType.QInt8,
+        per_channel=True,
+        # Keep INT8 on transformer-heavy linear ops for better ORT compatibility.
+        op_types_to_quantize=["MatMul", "Gemm"],
+    )
+    if inplace:
+        write_path.replace(dst_path)
+    print(f"  [INT8] Saved: {dst_path}")
 
 
 # TensorRT-compatible Position Encoding
@@ -538,10 +573,42 @@ def main():
         action="store_true",
         help="Export decoder in FP16.",
     )
+    parser.add_argument(
+        "--int8",
+        action="store_true",
+        help="Export INT8 ONNX via ONNX Runtime dynamic quantization (vision only by default).",
+    )
+    parser.add_argument(
+        "--int8-vision",
+        action="store_true",
+        help="Quantize vision-encoder to INT8.",
+    )
+    parser.add_argument(
+        "--int8-text",
+        action="store_true",
+        help="Quantize text-encoder to INT8.",
+    )
+    parser.add_argument(
+        "--int8-geometry",
+        action="store_true",
+        help="Quantize geometry-encoder to INT8.",
+    )
+    parser.add_argument(
+        "--int8-decoder",
+        action="store_true",
+        help="Quantize decoder to INT8.",
+    )
+    parser.add_argument(
+        "--int8-keep-original",
+        action="store_true",
+        help="Keep original ONNX files and write INT8 as *-int8.onnx (default overwrites selected modules).",
+    )
     args = parser.parse_args()
 
     if not args.module and not args.all:
         parser.error("Please specify --module or --all")
+    if args.fp16 and args.int8:
+        parser.error("--fp16 and --int8 cannot be used together in one export run.")
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -572,6 +639,26 @@ def main():
             print("  ! geometry-encoder will be exported in FP32 (safer for ONNX Runtime/C#)")
     elif args.fp16:
         print("  ! --fp16 was set but device is not CUDA; continuing with default dtype.")
+
+    int8_enabled = bool(args.int8)
+    int8_modules = set()
+    if int8_enabled:
+        int8_modules = {"vision"}
+        if args.int8_vision or args.int8_text or args.int8_geometry or args.int8_decoder:
+            int8_modules = set()
+            if args.int8_vision:
+                int8_modules.add("vision")
+            if args.int8_text:
+                int8_modules.add("text")
+            if args.int8_geometry:
+                int8_modules.add("geometry")
+            if args.int8_decoder:
+                int8_modules.add("decoder")
+        print(f"  ✓ INT8 quantization enabled for modules: {', '.join(sorted(int8_modules))}")
+        if args.int8_keep_original:
+            print("  ! INT8 files will be written as *-int8.onnx (original ONNX kept).")
+        else:
+            print("  ! INT8 quantization will overwrite exported ONNX files.")
     print("  ✓ Model loaded\n")
 
     modules = ["vision", "text", "geometry", "decoder"] if args.all else [args.module]
@@ -587,6 +674,14 @@ def main():
                 "geometry": export_geometry_encoder,
                 "decoder": export_decoder,
             }[m](model, output_dir, args.device, args.size)
+
+            if int8_enabled and m in int8_modules:
+                src_path = output_dir / MODULE_TO_ONNX[m]
+                if args.int8_keep_original:
+                    dst_path = src_path.with_name(f"{src_path.stem}-int8{src_path.suffix}")
+                else:
+                    dst_path = src_path
+                quantize_onnx_int8(src_path, dst_path)
 
     model_path = Path(args.model_path)
     for asset_name in TOKENIZER_ASSETS:
