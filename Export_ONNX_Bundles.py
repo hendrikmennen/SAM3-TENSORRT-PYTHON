@@ -43,7 +43,7 @@ def zip_directory_contents(source_dir: Path, zip_path: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Export SAM3 ONNX variants (644/1008 x FP16/INT8) and zip each output folder."
+        description="Export SAM3 ONNX variants (multi-resolution x FP16/INT8) and zip each output folder."
     )
     parser.add_argument("--model-path", required=True, help="Path to SAM3 model directory.")
     parser.add_argument("--device", default="cuda", help="Export device (default: cuda).")
@@ -56,6 +56,16 @@ def main() -> None:
         "--export-script",
         default="SAM3_PyTorch_To_Onnx.py",
         help="Path to the export script (default: SAM3_PyTorch_To_Onnx.py).",
+    )
+    parser.add_argument(
+        "--sizes",
+        type=int,
+        nargs="+",
+        default=[644, 1008, 1120, 1260, 1344],
+        help=(
+            "Image sizes to export. Each size must be divisible by 14. "
+            "Default: 644 1008 1120 1260 1344"
+        ),
     )
     args = parser.parse_args()
 
@@ -70,12 +80,15 @@ def main() -> None:
     if not model_path.exists():
         raise FileNotFoundError(f"Model path not found: {model_path}")
 
-    variants = [
-        (644, "fp16"),
-        (644, "int8"),
-        (1008, "fp16"),
-        (1008, "int8"),
-    ]
+    invalid_sizes = [size for size in args.sizes if size % 14 != 0]
+    if invalid_sizes:
+        raise ValueError(
+            "All --sizes must be divisible by 14. "
+            f"Invalid values: {invalid_sizes}"
+        )
+
+    sizes = sorted(set(args.sizes))
+    variants = [(size, mode) for size in sizes for mode in ("fp16", "int8")]
 
     for size, mode in variants:
         folder_name = f"onnx_{size}_{mode}"
